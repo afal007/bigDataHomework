@@ -11,270 +11,221 @@ np.random.shuffle(iris_data)
 iris_data_train = iris_data[:100]
 iris_data_test = iris_data[100:]
 
-'''
-    distance(vector, vector)
 
-    u and x looks like [characteristics]
-    return: scalar
-'''
+class ClassificationAlgorithm(object):
+    def __init__(self, train_data, test_data):
+        self.train_data = train_data
+        self.test_data = test_data
+        self.accuracy_matrix = []
+        self.result = []
+        self.target = []
+        self.fill_target()
 
+    '''
+        distance(vector, vector)
 
-def distance(u, x):
-    diff = list(np.array(u) - np.array(x))
-    return np.dot(np.transpose(diff), diff) ** 0.5
+        u and x looks like [characteristics]
+        return: scalar
+    '''
 
+    def distance(self, u, x):
+        diff = list(np.array(u) - np.array(x))
+        return np.dot(np.transpose(diff), diff) ** 0.5
 
-'''
-    nearest_neighbour(train_dataset, test_dataset)
+    def apply(self):
+        distances = []
 
-    train_data and test_data looks like [[[characteristics], class], ... , [[characteristics], class]]
-'''
+        for u in self.test_data:
+            for j, x in enumerate(self.train_data):
+                distances.append([self.distance(u[0], x[0]), j])  # list of [distance, element_number]
+            distances.sort(key=lambda t: t[0])
 
+            self.eval_class(distances)
+            distances.clear()
+        self.fill_accuracy_matrix()
 
-def nearest_neighbour(train_data, test_data):
-    distances, result = [], []
+    def eval_class(self, distances):
+        raise NotImplementedError()
 
-    for u in test_data:
-        for j, x in enumerate(train_data):
-            distances.append([distance(u[0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
-        '''
-            result - list of classes.
-            take element number distances[0][1] from train_data and return its class.
-        '''
-        result.append(train_data[distances[0][1]][1])
-        distances.clear()
-    return result
+    def fill_target(self):
+        for i in self.test_data:
+            self.target.append(i[1])
 
+    def get_accuracy(self):
+        positive, negative = 0, 0
+        for elem in zip(self.result, self.target):
+            if elem[0] == elem[1]:
+                positive += 1
+            else:
+                negative += 1
+        return positive / (negative + positive)
 
-'''
-    eval_class(distances, dataset, neighbours_num)
+    def fill_accuracy_matrix(self):
+        self.accuracy_matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+        for elem in zip(self.result, self.target):
+            self.accuracy_matrix[elem[0]][elem[1]] += 1
 
-    fills classes vector.
-    train_data[n][1] - class number
-    dist[i][1] - elem number
-    return: index of max elem in classes
-'''
+    def get_precision_and_recall(self):
+        result = []
+        for i in range(len(self.accuracy_matrix)):
+            tp = self.accuracy_matrix[i][i]
+            fp, fn = 0, 0
+            for j in range(len(self.accuracy_matrix)):
+                if i != j:
+                    fp += self.accuracy_matrix[i][j]
+                    fn += self.accuracy_matrix[j][i]
+            if tp + fp != 0:
+                precision = tp / (tp + fp)
+            else:
+                precision = 0
 
+            if tp + fn != 0:
+                recall = tp / (tp + fn)
+            else:
+                recall = 0
 
-def eval_class(dist, train_data, k):
-    classes = [0, 0, 0]
-    for i in range(k):
-        classes[train_data[dist[i][1]][1]] += 1
-    return classes.index(max(classes))
-
-
-def k_nearest_neighbours(train_data, test_data, k):
-    distances, result = [], []
-
-    for u in test_data:
-        for j, x in enumerate(train_data):
-            distances.append([distance(u[0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
-
-        result.append(eval_class(distances, train_data, k))
-        distances.clear()
-    return result
-
-
-'''
-    eval_class_weighed(distances, dataset, neighbours_num, weight_base)
-
-    exponential weight.
-    fills classes vector.
-    train_data[n][1] - class number
-    dist[i][1] - elem number
-    return: index of max elem in classes
-'''
-
-
-def eval_class_weighed(dist, train_data, k, q):
-    classes = [0, 0, 0]
-    for i in range(k):
-        classes[train_data[dist[i][1]][1]] += q ** i
-    return classes.index(max(classes))
+            result.append(
+                {"Precision": precision,
+                 "Recall": recall
+                 })
+        return result
 
 
-def weighed_k_nearest_neighbours(train_data, test_data, k, q):
-    distances, result = [], []
-
-    for u in test_data:
-        for j, x in enumerate(train_data):
-            distances.append([distance(u[0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
-
-        result.append(eval_class_weighed(distances, train_data, k, q))
-        distances.clear()
-    return result
+class NearestNeighbour(ClassificationAlgorithm):
+    def eval_class(self, distances):
+        self.result.append(self.train_data[distances[0][1]][1])
 
 
-def kernel(x):
-    return (3 / 4) * (1 - x ** 2) * (x <= 1)
+class KNearestNeighbours(ClassificationAlgorithm):
+    def __init__(self, train_data, test_data, k=2):
+        super().__init__(train_data, test_data)
+        self.k = k
+
+    def eval_class(self, distances):
+        classes = [0, 0, 0]
+        for i in range(self.k):
+            classes[self.train_data[distances[i][1]][1]] += 1
+        self.result.append(classes.index(max(classes)))
 
 
-def eval_class_kernel(dist, train_data, k):
-    classes = [0, 0, 0]
-    for i in range(k):
-        classes[train_data[dist[i][1]][1]] += kernel(dist[i][0] / dist[k][0])
-    return classes.index(max(classes))
+class WeighedKNearestNeighbours(ClassificationAlgorithm):
+    def __init__(self, train_data, test_data, k=2, q=0.5):
+        super().__init__(train_data, test_data)
+        self.k = k
+        self.q = q
+
+    def eval_class(self, distances):
+        classes = [0, 0, 0]
+        for i in range(self.k):
+            classes[self.train_data[distances[i][1]][1]] += self.q ** i
+        self.result.append(classes.index(max(classes)))
 
 
-def parzen_window(train_data, test_data, k):
-    distances, result = [], []
+class ParzenWindow(ClassificationAlgorithm):
+    def __init__(self, train_data, test_data, k=2, kernel=0):
+        super().__init__(train_data, test_data)
+        self.k = k
 
-    for u in test_data:
-        for j, x in enumerate(train_data):
-            distances.append([distance(u[0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
-
-        result.append(eval_class_kernel(distances, train_data, k))
-        distances.clear()
-    return result
-
-
-def potential_k(x):
-    return 1 / (x + 1)
-
-
-def eval_class_potential(dist, train_data, gamma):
-    classes = [0, 0, 0]
-
-    for i in range(1, len(train_data)):
-        classes[train_data[dist[i][1]][1]] += gamma[i] * potential_k(dist[i][0] / dist[5][0])
-    return classes.index(max(classes))
-
-
-def tune_potential(train_data):
-    distances, tuned = [], []
-    gamma = [0 for i in range(len(train_data))]
-    error = len(train_data)
-    cur_result = 0
-
-    while error > 20:
-        i = rand.randint(0, len(train_data) - 1)  # Choose random elem from train dataset
-        if i in tuned:  # If gamma for this element is tuned - continue
-            continue
-
-        # Eval distances
-        for j, x in enumerate(train_data):
-            distances.append([distance(train_data[i][0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
-        distances[0][0] = 99999
-
-        # Apply algorithm
-        cur_result = eval_class_potential(distances, train_data, gamma)
-        distances.clear()
-
-        if cur_result != train_data[i][1]:
-            # If not correct answer gamma++
-            gamma[i] += 1
+        if kernel != 0:
+            self.kernel = kernel
         else:
-            # Else remember that we tuned this gamma and error--
-            tuned.append(i)
-            error -= 1
-    return gamma
+            self.kernel = self.default_kernel
+
+    def default_kernel(self, x):
+        return (3 / 4) * (1 - x ** 2) * (x <= 1)
+
+    def eval_class(self, distances):
+        classes = [0, 0, 0]
+        for i in range(self.k):
+            classes[self.train_data[distances[i][1]][1]] += self.kernel(distances[i][0] / distances[self.k][0])
+
+        self.result.append(classes.index(max(classes)))
 
 
-def potential_funcs(train_data, test_data):
-    distances, result = [], []
-    gamma = tune_potential(train_data)
-    print("\nGamma: ", gamma)
+class PotentialFuncs(ClassificationAlgorithm):
+    def __init__(self, train_data, test_data, h):
+        super().__init__(train_data, test_data)
+        self.h = h
+        self.gamma = self.tune_gamma()
 
-    for u in test_data:
-        for j, x in enumerate(train_data):
-            distances.append([distance(u[0], x[0]), j])  # list of [distance, element_number]
-        distances.sort(key=lambda t: t[0])
+    def potential(self, x):
+        return 1 / (x + 1)
 
-        result.append(eval_class_potential(distances, train_data, gamma))
-        distances.clear()
-    return result
+    def tune_gamma(self):
+        distances, tuned = [], []
+        self.gamma = [0 for i in range(len(self.train_data))]
+        error = len(self.train_data)
+        cur_result = 0
 
+        while error > 20:
+            i = rand.randint(0, len(self.train_data) - 1)  # Choose random elem from train dataset
+            if i in tuned:  # If gamma for this element is tuned - continue
+                continue
 
-def accuracy(result, target):
-    positive, negative = 0, 0
-    for elem in zip(result, target):
-        if elem[0] == elem[1]:
-            positive += 1
-        else:
-            negative += 1
-    return positive / (negative + positive)
+            # Eval distances
+            for j, x in enumerate(self.train_data):
+                distances.append([self.distance(self.train_data[i][0], x[0]), j])  # list of [distance, element_number]
+            distances.sort(key=lambda t: t[0])
+            distances[0][0] = 99999
 
+            # Apply algorithm
+            cur_result = self.eval_class_gamma(distances)
+            distances.clear()
 
-def precision_and_recall(matrix):
-    result = []
-    for i in range(len(matrix)):
-        tp = matrix[i][i]
-        fp, fn = 0, 0
-        for j in range(len(matrix)):
-            if i != j:
-                fp += matrix[i][j]
-                fn += matrix[j][i]
-        if tp + fp != 0:
-            precision = tp / (tp + fp)
-        else:
-            precision = 0
+            if cur_result != self.train_data[i][1]:
+                # If not correct answer gamma++
+                self.gamma[i] += 1
+            else:
+                # Else remember that we tuned this gamma and error--
+                tuned.append(i)
+                error -= 1
+        return self.gamma
 
-        if tp + fn != 0:
-            recall = tp / (tp + fn)
-        else:
-            recall = 0
+    def eval_class_gamma(self, distances):
+        classes = [0, 0, 0]
 
-        result.append(
-            {"Precision": precision,
-             "Recall": recall
-             })
-    return result
+        for i in range(1, self.h + 1):
+            classes[self.train_data[distances[i][1]][1]] += self.gamma[i] * self.potential(distances[i][0] / distances[self.h + 1][0])
+        return classes.index(max(classes))
 
+    def eval_class(self, distances):
+        classes = [0, 0, 0]
 
-def fill_accuracy_matrix(result, target):
-    matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
-    for elem in zip(result, target):
-        matrix[elem[0]][elem[1]] += 1
-    return matrix
+        for i in range(self.h):
+            classes[self.train_data[distances[i][1]][1]] += self.gamma[i] * self.potential(distances[i][0] / distances[self.h][0])
+        self.result.append(classes.index(max(classes)))
 
-
-target_test = []
-for i in iris_data_test:
-    target_test.append(i[1])
-print("Target: ")
-print(target_test)
-
-result = nearest_neighbour(iris_data_train, iris_data_test)
 print("\nNearest neighbour: ")
-print(result)
-print(accuracy(result, target_test))
-accuracy_matrix = fill_accuracy_matrix(result, target_test)
-print(accuracy_matrix)
-print(precision_and_recall(accuracy_matrix))
+alg = NearestNeighbour(iris_data_train, iris_data_test)
+alg.apply()
+print(alg.get_accuracy())
+print(alg.accuracy_matrix)
+print(alg.get_precision_and_recall())
 
-result = k_nearest_neighbours(iris_data_train, iris_data_test, 4)
-print("\nk nearest neighbours: ")
-print(result)
-print(accuracy(result, target_test))
-accuracy_matrix = fill_accuracy_matrix(result, target_test)
-print(accuracy_matrix)
-print(precision_and_recall(accuracy_matrix))
+print("\nK nearest neighbours: ")
+alg = KNearestNeighbours(iris_data_train, iris_data_test, 5)
+alg.apply()
+print(alg.get_accuracy())
+print(alg.accuracy_matrix)
+print(alg.get_precision_and_recall())
 
-result = weighed_k_nearest_neighbours(iris_data_train, iris_data_test, 3, 0.6)
-print("\nWeighed k nearest neighbours: ")
-print(result)
-print(accuracy(result, target_test))
-accuracy_matrix = fill_accuracy_matrix(result, target_test)
-print(accuracy_matrix)
-print(precision_and_recall(accuracy_matrix))
+print("\nWeighed k neighbours: ")
+alg = WeighedKNearestNeighbours(iris_data_train, iris_data_test, 5, 0.6)
+alg.apply()
+print(alg.get_accuracy())
+print(alg.accuracy_matrix)
+print(alg.get_precision_and_recall())
 
-result = parzen_window(iris_data_train, iris_data_test, 5)
 print("\nParzen window: ")
-print(result)
-print(accuracy(result, target_test))
-accuracy_matrix = fill_accuracy_matrix(result, target_test)
-print(accuracy_matrix)
-print(precision_and_recall(accuracy_matrix))
+alg = ParzenWindow(iris_data_train, iris_data_test, 5)
+alg.apply()
+print(alg.get_accuracy())
+print(alg.accuracy_matrix)
+print(alg.get_precision_and_recall())
 
-result = potential_funcs(iris_data_train, iris_data_test)
 print("\nPotential funcs: ")
-print(result)
-print(accuracy(result, target_test))
-accuracy_matrix = fill_accuracy_matrix(result, target_test)
-print(accuracy_matrix)
-print(precision_and_recall(accuracy_matrix))
+alg = PotentialFuncs(iris_data_train, iris_data_test, 10)
+alg.apply()
+print(alg.get_accuracy())
+print(alg.accuracy_matrix)
+print(alg.get_precision_and_recall())
