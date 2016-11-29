@@ -8,5 +8,5 @@ setup(
     license='',
     author='afal',
     author_email='falalexandr007@gmail.com',
-    description='', requires=['sklearn', 'numpy']
+    description='', requires=['sklearn', 'numpy', 'plotly']
 )
