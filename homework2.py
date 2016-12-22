@@ -155,10 +155,10 @@ class LogisticRegression(object):
         print(res)
         print(["%0.2f" % i for i in res2])
 
-alg = LogisticRegression(iris_data, 0, 0.9)
+alg = LogisticRegression(iris_data, 1, 0.9)
 alg.train(0.1)
 alg.apply()
-alg.check()
+#alg.check()
 alg.print_result()
 alg.print_roc_()
 #alg.print_roc()
